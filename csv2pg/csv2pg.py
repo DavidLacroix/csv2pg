@@ -140,7 +140,10 @@ def drop_table(cursor, table, verbose=False):
     cursor.execute(sql)
     if verbose:
         click.echo(cursor.statusmessage)
-        click.secho(cursor.query.decode(), fg='white')
+        try:
+            click.secho(cursor.connection.notices.pop().rstrip(), fg='white')
+        except IndexError:
+            click.secho(cursor.query.decode(), fg='white')
 
 
 def create_table(cursor, table, columns, verbose=False):
@@ -150,7 +153,7 @@ def create_table(cursor, table, columns, verbose=False):
     if verbose:
         click.echo(cursor.statusmessage)
         try:
-            click.secho(cursor.connection.notices[-1].rstrip(), fg='white')
+            click.secho(cursor.connection.notices.pop().rstrip(), fg='white')
         except IndexError:
             click.secho(cursor.query.decode(), fg='white')
 
