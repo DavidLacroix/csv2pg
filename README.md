@@ -3,7 +3,7 @@ A simple and fast cli application to load a csv into postgres
 
 ## Installation
 ```bash
-pip install csv2pg
+pip install --user csv2pg
 ```
 
 ## Usage
