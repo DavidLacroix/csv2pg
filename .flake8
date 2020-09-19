@@ -1,0 +1,10 @@
+[flake8]
+exclude = __pycache__,build,dist,.eggs
+# For black compatibility
+max-line-length = 88
+ignore =
+    # Global to Meilleurs Agents
+    W503,
+    # For black compatibility
+    E203,
+    E501,
