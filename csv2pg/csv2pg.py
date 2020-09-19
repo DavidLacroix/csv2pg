@@ -58,12 +58,49 @@ COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
 @click.option(
     "--header/--no-header", "header", is_flag=True, default=True, show_default=True
 )
-@click.option("--delimiter", "delimiter", default=",", show_default=True, help="char separating the fields")
-@click.option("--quotechar", "quotechar", default="\"", show_default=True, help="char used to quote a field")
-@click.option("--doublequote", "doublequote", is_flag=True, default=False, show_default=True, help="When True, escapechar is replaced by doubling the quote char")
-@click.option("--escapechar", "escapechar", default="\\", show_default=True, help="char used to esapce the quote char")
-@click.option("--lineterminator", "lineterminator", default="\r\n", show_default=True, help="line ending sequence")
-@click.option("--null", "null", default="", show_default=True, help="will be treated as NULL by postgres")
+@click.option(
+    "--delimiter",
+    "delimiter",
+    default=",",
+    show_default=True,
+    help="char separating the fields",
+)
+@click.option(
+    "--quotechar",
+    "quotechar",
+    default='"',
+    show_default=True,
+    help="char used to quote a field",
+)
+@click.option(
+    "--doublequote",
+    "doublequote",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="When True, escapechar is replaced by doubling the quote char",
+)
+@click.option(
+    "--escapechar",
+    "escapechar",
+    default="\\",
+    show_default=True,
+    help="char used to esapce the quote char",
+)
+@click.option(
+    "--lineterminator",
+    "lineterminator",
+    default="\r\n",
+    show_default=True,
+    help="line ending sequence",
+)
+@click.option(
+    "--null",
+    "null",
+    default="",
+    show_default=True,
+    help="will be treated as NULL by postgres",
+)
 @click.option("--encoding", "encoding", default="utf-8", show_default=True)
 @click.option(
     "--overwrite",
@@ -129,7 +166,7 @@ def cli(
 
     pgpassword = os.getenv("PGPASSWORD")
     if password:
-        click.prompt("Password", hide_input=True)
+        pgpassword = click.prompt("Password", hide_input=True)
     pg_uri = "postgres://{username}{password}@{hostname}:{port}/{dbname}?application_name=csv2pg".format(
         username=username,
         password=(":" + pgpassword if pgpassword else ""),

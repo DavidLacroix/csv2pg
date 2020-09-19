@@ -53,9 +53,9 @@ init-test:
 
 ## test: Functional tests
 .PHONY: test
-test:
+test: init-test
 	PYTHONPATH=. pytest --pdb tests
-	#docker stop csv2pg-test -t 10 || true
+	docker stop csv2pg-test -t 10 || true
 
 ## clean: Remove temporary files
 .PHONY: clean

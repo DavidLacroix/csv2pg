@@ -6,17 +6,9 @@ HERE = pathlib.Path(__file__).parent
 # The text of the README file
 README = (HERE / "README.md").read_text()
 
-def get_version(rel_path):
-    for line in read(rel_path).splitlines():
-        if line.startswith('__version__'):
-            delim = '"' if '"' in line else "'"
-            return line.split(delim)[1]
-    else:
-        raise RuntimeError("Unable to find version string.")
 
 setup(
     name='csv2pg',
-    version=get_version('csv2pg/__init__.py'),
     url='https://github.com/DavidLacroix/csv2pg',
     description='A simple and fast cli application to load a csv into postgres',
     long_description=README,
@@ -37,7 +29,7 @@ setup(
         'Click',
         'psycopg2-binary>=2.0.6',
     ],
-    python_requires='>=2.7',
+    python_requires='>=3.5',
     entry_points='''
         [console_scripts]
         csv2pg=csv2pg.csv2pg:cli

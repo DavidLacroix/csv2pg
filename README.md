@@ -18,8 +18,5 @@ csv2pg -h localhost -p 5432 -U postgres -d postgres public.my_table data.csv --v
 PGHOST=mypg.host.com PGPORT=5432 PGDATABASE=mydb PGUSER=myuser csv2pg public.my_table data.csv --verbose
 ```
 
-### Dialect discovery
-With python csv.Sniffer() class the csv parameters like `delimiter`, `quotechar`, `escapechar`, `lineterminator` are automatically detected. They can be overriden with cli options.
-
 ### Basic database utilities
 csv2pg will automatically create the table using the header of the csv file. Caution, the option `--overwrite` will drop the table before inserting the new records in. 
