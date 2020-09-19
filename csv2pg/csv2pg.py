@@ -58,11 +58,12 @@ COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
 @click.option(
     "--header/--no-header", "header", is_flag=True, default=True, show_default=True
 )
-@click.option("--delimiter", "delimiter")
-@click.option("--quotechar", "quotechar")
-@click.option("--escapechar", "escapechar")
-@click.option("--lineterminator", "lineterminator")
-@click.option("--null", "null", default="", help="will be treated as NULL by postgres")
+@click.option("--delimiter", "delimiter", default=",", show_default=True, help="char separating the fields")
+@click.option("--quotechar", "quotechar", default="\"", show_default=True, help="char used to quote a field")
+@click.option("--doublequote", "doublequote", is_flag=True, default=False, show_default=True, help="When True, escapechar is replaced by doubling the quote char")
+@click.option("--escapechar", "escapechar", default="\\", show_default=True, help="char used to esapce the quote char")
+@click.option("--lineterminator", "lineterminator", default="\r\n", show_default=True, help="line ending sequence")
+@click.option("--null", "null", default="", show_default=True, help="will be treated as NULL by postgres")
 @click.option("--encoding", "encoding", default="utf-8", show_default=True)
 @click.option(
     "--overwrite",
@@ -93,6 +94,7 @@ def cli(
     header,
     delimiter,
     quotechar,
+    doublequote,
     escapechar,
     lineterminator,
     null,
@@ -105,16 +107,13 @@ def cli(
     """
     COPY FROM 'csv' TO 'postgres'
     """
-    dialect = sniff(filepath, encoding=encoding)
-    dialect.delimiter = delimiter or dialect.delimiter
-    dialect.quotechar = quotechar or dialect.quotechar
-    dialect.escapechar = escapechar or dialect.escapechar or dialect.quotechar
-    dialect.lineterminator = lineterminator or dialect.lineterminator
-
-    dialect.delimiter = str(dialect.delimiter)
-    dialect.quotechar = str(dialect.quotechar)
-    dialect.escapechar = str(dialect.escapechar)
-    dialect.lineterminator = str(dialect.lineterminator)
+    dialect = csv.Dialect
+    dialect.delimiter = str(delimiter)
+    dialect.quotechar = str(quotechar)
+    dialect.doublequote = str(doublequote)
+    dialect.escapechar = str(escapechar)
+    dialect.lineterminator = str(lineterminator)
+    dialect.quoting = csv.QUOTE_MINIMAL
 
     if verbose:
         click.echo(
@@ -187,16 +186,6 @@ def check_database(uri):
         pass
     status = True
     return status, server_version
-
-
-def sniff(filepath, encoding="utf-8"):
-    """
-    Discovering csv parameters
-    """
-    with io.open(filepath, "r", newline="", encoding=encoding) as f:
-        dialect = csv.Sniffer().sniff(f.readline())
-
-    return dialect
 
 
 def get_columns(filepath, header, dialect, encoding="utf-8"):
