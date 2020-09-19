@@ -22,7 +22,6 @@ build: clean format style test
 ## distribute: Publish version to pypi
 .PHONY: distribute
 distribute: build
-	twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 	twine upload dist/*
 
 ## format: Autoformat code
