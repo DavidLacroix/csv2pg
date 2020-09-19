@@ -10,7 +10,6 @@ import click
 import psycopg2
 import psycopg2.extras
 
-SNIFFER_BUFFER = 2 ** 14  # amount of char to read to discover the csv file dialect
 COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
 
 
@@ -195,7 +194,8 @@ def sniff(filepath, encoding="utf-8"):
     Discovering csv parameters
     """
     with io.open(filepath, "r", newline="", encoding=encoding) as f:
-        dialect = csv.Sniffer().sniff(f.read(SNIFFER_BUFFER))
+        dialect = csv.Sniffer().sniff(f.readline())
+
     return dialect
 
 
