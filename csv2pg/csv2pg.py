@@ -249,9 +249,8 @@ def copy(
     null="",
     verbose=False,
 ):
-    sql = "COPY {table} FROM STDIN WITH CSV ENCODING {encoding} DELIMITER {delimiter} NULL {null}{quote}{escape}{header}".format(
+    sql = "COPY {table} FROM STDIN WITH CSV DELIMITER {delimiter} NULL {null}{quote}{escape}{header}".format(
         table=table,
-        encoding=psycopg2.extensions.adapt(encoding),
         delimiter=psycopg2.extensions.adapt(dialect.delimiter),
         null=psycopg2.extensions.adapt(null),
         quote=" QUOTE {}".format(psycopg2.extensions.adapt(dialect.quotechar))
@@ -262,7 +261,7 @@ def copy(
         else "",
         header=" HEADER" if header else "",
     )
-    with io.open(filepath, "r") as f:
+    with io.open(filepath, "r", encoding=encoding) as f:
         cursor.copy_expert(sql, f, size=buffer_size)
 
     if verbose:
