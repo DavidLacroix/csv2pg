@@ -6,9 +6,9 @@ HERE = pathlib.Path(__file__).parent
 # The text of the README file
 README = (HERE / "README.md").read_text()
 
+
 setup(
     name='csv2pg',
-    version='1.0.0b2',
     url='https://github.com/DavidLacroix/csv2pg',
     description='A simple and fast cli application to load a csv into postgres',
     long_description=README,
@@ -23,13 +23,13 @@ setup(
         'Programming Language :: Python :: 3',
     ],
     keywords='postgres csv',
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests", "tests.*"]),
     include_package_data=True,
     install_requires=[
         'Click',
         'psycopg2-binary>=2.0.6',
     ],
-    python_requires='>=2.7',
+    python_requires='>=3.5',
     entry_points='''
         [console_scripts]
         csv2pg=csv2pg.csv2pg:cli
