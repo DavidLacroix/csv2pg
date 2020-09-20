@@ -5,6 +5,7 @@ import csv
 import getpass
 import io
 import os
+import tempfile
 
 import click
 import psycopg2
@@ -57,6 +58,14 @@ COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
 @click.option("-v", "--verbose", "verbose", is_flag=True, default=False)
 @click.option(
     "--header/--no-header", "header", is_flag=True, default=True, show_default=True
+)
+@click.option(
+    "--rownum/--no-rownum",
+    "rownum",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="include original file row number in postgres table (! slower !)",
 )
 @click.option(
     "--delimiter",
@@ -129,6 +138,7 @@ def cli(
     password,
     verbose,
     header,
+    rownum,
     delimiter,
     quotechar,
     doublequote,
@@ -183,7 +193,7 @@ def cli(
             "Database connection success {} [{}]".format(pg_uri, db_server_version)
         )
 
-    columns = get_columns(filepath, header, dialect, encoding=encoding)
+    columns = get_columns(filepath, header, dialect, encoding=encoding, rownum=rownum)
 
     with psycopg2.connect(
         pg_uri, cursor_factory=psycopg2.extras.RealDictCursor
@@ -191,7 +201,7 @@ def cli(
         with connection.cursor() as cursor:
             if overwrite:
                 drop_table(cursor, table, verbose=verbose)
-            create_table(cursor, table, columns, verbose=verbose)
+            create_table(cursor, table, columns, rownum=rownum, verbose=verbose)
             connection.commit()
             copy(
                 cursor,
@@ -203,6 +213,7 @@ def cli(
                 encoding=encoding,
                 null=null,
                 verbose=verbose,
+                rownum=rownum,
             )
 
 
@@ -225,7 +236,7 @@ def check_database(uri):
     return status, server_version
 
 
-def get_columns(filepath, header, dialect, encoding="utf-8"):
+def get_columns(filepath, header, dialect, encoding="utf-8", rownum=False):
     """
     Extracting columns from csv file. If --no-header is specified, return generic columns.
     """
@@ -237,6 +248,7 @@ def get_columns(filepath, header, dialect, encoding="utf-8"):
             return
 
     columns = line if header else _default_columns(line)
+
     return columns
 
 
@@ -259,10 +271,12 @@ def drop_table(cursor, table, verbose=False):
             click.secho(cursor.query.decode(), fg="white")
 
 
-def create_table(cursor, table, columns, verbose=False):
+def create_table(cursor, table, columns, rownum=False, verbose=False):
     columns_sql = ", \n".join(
         '    "{column}" TEXT'.format(column=column) for column in columns
     )
+    if rownum:
+        columns_sql = "rownum INTEGER,\n" + columns_sql
     sql = "CREATE TABLE IF NOT EXISTS {table} (\n{columns}\n);".format(
         table=table, columns=columns_sql
     )
@@ -285,6 +299,7 @@ def copy(
     encoding="utf-8",
     null="",
     verbose=False,
+    rownum=False,
 ):
     sql = "COPY {table} FROM STDIN WITH CSV DELIMITER {delimiter} NULL {null}{quote}{escape}{header}".format(
         table=table,
@@ -299,11 +314,29 @@ def copy(
         header=" HEADER" if header else "",
     )
     with io.open(filepath, "r", encoding=encoding) as f:
-        cursor.copy_expert(sql, f, size=buffer_size)
+        with tempfile.NamedTemporaryFile(
+            mode="w+", prefix="csv2pg", suffix=".tmp", encoding=encoding
+        ) as temp:
+            target_file = f
+            print(tempfile.tempdir)
+            if rownum:
+                target_file = _add_rownum(f, temp, dialect.delimiter, header)
+            cursor.copy_expert(sql, target_file, size=buffer_size)
 
     if verbose:
         click.echo("COPY {}".format(cursor.rowcount))
         click.secho(sql, fg="white")
+
+
+def _add_rownum(f_in, f_out, delimiter, header):
+    for i, line in enumerate(f_in):
+        rownum = i if header else i + 1  # rownumber start at 1 after header
+        rownum_line = "{rownum}{delimiter}{line}".format(
+            rownum=rownum, delimiter=delimiter, line=line
+        )
+        f_out.write(rownum_line)
+    f_out.seek(0)
+    return f_out
 
 
 if __name__ == "__main__":

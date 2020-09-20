@@ -18,5 +18,6 @@ csv2pg -h localhost -p 5432 -U postgres -d postgres public.my_table data.csv --v
 PGHOST=mypg.host.com PGPORT=5432 PGDATABASE=mydb PGUSER=myuser csv2pg public.my_table data.csv --verbose
 ```
 
-### Basic database utilities
-csv2pg will automatically create the table using the header of the csv file. Caution, the option `--overwrite` will drop the table before inserting the new records in. 
+### Precaution
+* the `--overwrite` option will drop the table before inserting the new records in. 
+* the `--rownum` option copies the input file in your `TMPDIR` thus increasing the loading time

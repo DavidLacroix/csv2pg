@@ -1,6 +1,7 @@
 import os
 
 import psycopg2
+import pytest
 
 from csv2pg.csv2pg import COPY_BUFFER, cli
 
@@ -22,6 +23,7 @@ def call_csv2pg(
     tablename,
     filepath,
     header=True,
+    rownum=False,
     delimiter=",",
     quotechar='"',
     doublequote=False,
@@ -40,6 +42,7 @@ def call_csv2pg(
         False,  # force-password
         False,  # verbose
         header,
+        rownum,
         delimiter,
         quotechar,
         doublequote,
@@ -272,3 +275,85 @@ def test_complex():
             assert len(rows) == 1000
             for row in rows:
                 assert len(row) == 19
+
+
+def test_rownum():
+    tablename = "rownum"
+    asset = "tests/assets/simple.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, rownum=True)
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 10
+            for i, row in enumerate(rows):
+                assert len(row) == 4
+                assert int(row[0]) == (i + 1)
+                for col in row:
+                    assert col is not None
+
+
+def test_rownum_no_header():
+    tablename = "rownum_no_header"
+    asset = "tests/assets/no_header.csv"
+
+    call_csv2pg(
+        tablename, asset, overwrite=True, delimiter="@", header=False, rownum=True
+    )
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 10
+            for i, row in enumerate(rows):
+                assert len(row) == 4
+                assert int(row[0]) == (i + 1)
+                for col in row:
+                    assert col is not None
+
+
+def test_rownum_encoding_iso_8859_1():
+    tablename = "rownum_encoding_iso_8859_1"
+    asset = "tests/assets/encoding_ISO_8859_1.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, rownum=True, encoding="ISO-8859-1")
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 1
+            assert rows[0][0] == 1
+            assert rows[0][1] == "ÑÆÛý¼àáäæ"
+
+
+def test_rownum_encoding_GB18030():
+    tablename = "rownum_encoding_GB18030"
+    asset = "tests/assets/encoding_GB18030.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, rownum=True, encoding="GB18030")
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 1
+            assert rows[0][0] == 1
+            assert rows[0][1] == "气广"
+
+
+def test_insert_error():
+    tablename = "insert_error"
+    asset = "tests/assets/simple_error.csv"
+
+    with pytest.raises(psycopg2.errors.BadCopyFileFormat):
+        call_csv2pg(tablename, asset)
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 0
