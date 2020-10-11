@@ -5,13 +5,34 @@ import csv
 import getpass
 import io
 import os
-import tempfile
+import re
 
 import click
 import psycopg2
 import psycopg2.extras
+from tqdm import tqdm
+
+from bin import __version__
+from lib.striter import StringIteratorIO
 
 COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
+FIELD_VALIDITY_PATTERN = "^([^{quotechar}]+|{quotechar}(?:[^{quotechar}]|{quotechar}{quotechar}|{escapechar}{quotechar})*{quotechar})?$"
+
+
+class CsvException(Exception):
+    pass
+
+
+class TooManyFieldsException(CsvException):
+    pass
+
+
+class MissingFieldsException(CsvException):
+    pass
+
+
+class WrongFieldDialectException(CsvException):
+    pass
 
 
 @click.command()
@@ -57,6 +78,17 @@ COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
 )
 @click.option("-v", "--verbose", "verbose", is_flag=True, default=False)
 @click.option(
+    "--progress", "progress", is_flag=True, default=False, help="display progress bar"
+)
+@click.option(
+    "--skip-error",
+    "skip_error",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="detect, ignore and export errors to <filepath>.err",
+)
+@click.option(
     "--header/--no-header", "header", is_flag=True, default=True, show_default=True
 )
 @click.option(
@@ -65,7 +97,15 @@ COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
     is_flag=True,
     default=False,
     show_default=True,
-    help="include original file row number in postgres table (! slower !)",
+    help="include line number in a _rownum column",
+)
+@click.option(
+    "--filename/--no-filename",
+    "filename",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="include filename in a _filename column",
 )
 @click.option(
     "--delimiter",
@@ -120,6 +160,14 @@ COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
     help="destroy table before inserting csv",
 )
 @click.option(
+    "--unlogged",
+    "unlogged",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="insert in an UNLOGGED table (faster)",
+)
+@click.option(
     "--buffer",
     "buffer",
     type=int,
@@ -129,7 +177,7 @@ COPY_BUFFER = 2 ** 13  # default read buffer size for copy_expert
 )
 @click.argument("table", nargs=1)
 @click.argument("filepath", nargs=1, type=click.Path())
-@click.version_option()
+@click.version_option(version=__version__)
 def cli(
     hostname,
     port,
@@ -137,8 +185,11 @@ def cli(
     username,
     password,
     verbose,
+    progress,
+    skip_error,
     header,
     rownum,
+    filename,
     delimiter,
     quotechar,
     doublequote,
@@ -147,6 +198,7 @@ def cli(
     null,
     encoding,
     overwrite,
+    unlogged,
     buffer,
     table,
     filepath,
@@ -161,6 +213,7 @@ def cli(
     dialect.escapechar = str(escapechar)
     dialect.lineterminator = str(lineterminator)
     dialect.quoting = csv.QUOTE_MINIMAL
+    dialect.skipinitialspace = True
 
     if verbose:
         click.echo(
@@ -173,6 +226,8 @@ def cli(
                 lt=repr(dialect.lineterminator),
             )
         )
+
+    columns = get_columns(filepath, header, dialect, encoding=encoding)
 
     pgpassword = os.getenv("PGPASSWORD")
     if password:
@@ -193,27 +248,37 @@ def cli(
             "Database connection success {} [{}]".format(pg_uri, db_server_version)
         )
 
-    columns = get_columns(filepath, header, dialect, encoding=encoding, rownum=rownum)
-
     with psycopg2.connect(
         pg_uri, cursor_factory=psycopg2.extras.RealDictCursor
     ) as connection:
         with connection.cursor() as cursor:
             if overwrite:
                 drop_table(cursor, table, verbose=verbose)
-            create_table(cursor, table, columns, rownum=rownum, verbose=verbose)
+            create_table(
+                cursor,
+                table,
+                columns,
+                filename=filename,
+                rownum=rownum,
+                verbose=verbose,
+                unlogged=unlogged,
+            )
             connection.commit()
             copy(
                 cursor,
                 table,
                 filepath,
                 header,
+                columns,
                 dialect,
                 buffer_size=buffer,
                 encoding=encoding,
                 null=null,
+                skip_error=skip_error,
                 verbose=verbose,
+                progress=progress,
                 rownum=rownum,
+                filename=filename,
             )
 
 
@@ -236,7 +301,7 @@ def check_database(uri):
     return status, server_version
 
 
-def get_columns(filepath, header, dialect, encoding="utf-8", rownum=False):
+def get_columns(filepath, header, dialect, encoding="utf-8"):
     """
     Extracting columns from csv file. If --no-header is specified, return generic columns.
     """
@@ -271,14 +336,19 @@ def drop_table(cursor, table, verbose=False):
             click.secho(cursor.query.decode(), fg="white")
 
 
-def create_table(cursor, table, columns, rownum=False, verbose=False):
+def create_table(
+    cursor, table, columns, rownum=False, filename=False, verbose=False, unlogged=False
+):
     columns_sql = ", \n".join(
         '    "{column}" TEXT'.format(column=column) for column in columns
     )
     if rownum:
-        columns_sql = "rownum INTEGER,\n" + columns_sql
-    sql = "CREATE TABLE IF NOT EXISTS {table} (\n{columns}\n);".format(
-        table=table, columns=columns_sql
+        columns_sql = "_rownum INTEGER,\n" + columns_sql
+    if filename:
+        columns_sql = "_filename TEXT,\n" + columns_sql
+    unlogged = " UNLOGGED " if unlogged else " "
+    sql = "CREATE{unlogged}TABLE IF NOT EXISTS {table} (\n{columns}\n);".format(
+        unlogged=unlogged, table=table, columns=columns_sql
     )
     cursor.execute(sql)
     if verbose:
@@ -294,12 +364,16 @@ def copy(
     table,
     filepath,
     header,
+    expected_columns,
     dialect,
     buffer_size=1024,
     encoding="utf-8",
     null="",
+    skip_error=False,
     verbose=False,
+    progress=False,
     rownum=False,
+    filename=False,
 ):
     sql = "COPY {table} FROM STDIN WITH CSV DELIMITER {delimiter} NULL {null}{quote}{escape}{header}".format(
         table=table,
@@ -313,30 +387,137 @@ def copy(
         else "",
         header=" HEADER" if header else "",
     )
-    with io.open(filepath, "r", encoding=encoding) as f:
-        with tempfile.NamedTemporaryFile(
-            mode="w+", prefix="csv2pg", suffix=".tmp", encoding=encoding
-        ) as temp:
-            target_file = f
-            print(tempfile.tempdir)
-            if rownum:
-                target_file = _add_rownum(f, temp, dialect.delimiter, header)
-            cursor.copy_expert(sql, target_file, size=buffer_size)
+
+    line_count = 0
+    if progress:
+        click.secho("Estimating file size...", fg="white")
+        with open(filepath, "rb") as f:
+            for line in f:
+                line_count += 1
+
+    if verbose:
+        click.secho(sql, fg="white")
+
+    with io.open(filepath, "r", encoding=encoding) as f_in:
+        err_filepath = filepath + ".err"
+        # TODO: only create err file if errors are found
+        with io.open(err_filepath, "w", encoding=encoding) as f_err:
+            wrapper = StringIteratorIO(
+                _wrap(
+                    f_in,
+                    f_err,
+                    dialect,
+                    header,
+                    expected_columns,
+                    skip_error=skip_error,
+                    verbose=verbose,
+                    progress=progress,
+                    progress_total=line_count,
+                    inject_rownum=rownum,
+                    inject_filename=filename,
+                )
+            )
+            cursor.copy_expert(sql, wrapper, size=buffer_size)
 
     if verbose:
         click.echo("COPY {}".format(cursor.rowcount))
-        click.secho(sql, fg="white")
 
 
-def _add_rownum(f_in, f_out, delimiter, header):
-    for i, line in enumerate(f_in):
-        rownum = i if header else i + 1  # rownumber start at 1 after header
-        rownum_line = "{rownum}{delimiter}{line}".format(
-            rownum=rownum, delimiter=delimiter, line=line
+def _wrap(
+    f_in,
+    f_err,
+    dialect,
+    header,
+    expected_columns,
+    skip_error=False,
+    verbose=False,
+    progress=False,
+    progress_total=None,
+    inject_rownum=False,
+    inject_filename=False,
+):
+    filename = f_in.name.split("/")[-1]
+    field_pattern = re.compile(
+        FIELD_VALIDITY_PATTERN.format(
+            quotechar=dialect.quotechar, escapechar=dialect.escapechar
         )
-        f_out.write(rownum_line)
-    f_out.seek(0)
-    return f_out
+    )
+
+    generated_header = []
+    writer = csv.writer(f_err, dialect=dialect)
+    for i, line in tqdm(enumerate(f_in), disable=not progress, total=progress_total):
+        line_number = i if header else i + 1
+        reader = csv.reader([line], dialect=dialect)
+        for r in reader:
+            parsed_line = r
+            break
+
+        # Init error file
+        if i == 0:
+            if header:
+                generated_header = ["_rownum", "_error"] + parsed_line
+            else:
+                generated_header = ["_rownum", "_error"] + expected_columns
+            writer.writerow(generated_header)
+
+        # Check line and skip
+        try:
+            if skip_error:
+                _check_line(expected_columns, parsed_line, field_pattern)
+        except CsvException as e:
+            err_row = _format_error(
+                filename, parsed_line, line_number, generated_header, e, verbose
+            )
+            writer.writerow(err_row)
+            continue
+
+        # Inject extra fields in line before insertion
+        if inject_rownum:
+            line = "{value}{delimiter}{line}".format(
+                value=line_number, delimiter=dialect.delimiter, line=line
+            )
+        if inject_filename:
+            line = "{value}{delimiter}{line}".format(
+                value=filename, delimiter=dialect.delimiter, line=line
+            )
+
+        # import pdb;pdb.set_trace()
+        yield line
+
+
+def _check_line(ref, target, pattern):
+    if len(ref) > len(target):
+        missing = len(ref) - len(target)
+        raise MissingFieldsException(f"{missing} missing fields", None)
+    if len(ref) < len(target):
+        extra = len(target) - len(ref)
+        raise TooManyFieldsException(f"{extra} extra fields", None)
+
+    for i, field in enumerate(target):
+        result = pattern.findall(field)
+        if len(result) != 1:
+            raise WrongFieldDialectException(field, i)
+        if result[0] != field:
+            raise WrongFieldDialectException(field, i)
+
+
+def _format_error(
+    filename, parsed_line, line_number, generated_header, exception, verbose
+):
+    error = exception.__class__.__name__
+    message, field_number = exception.args
+    try:
+        header_error = generated_header[field_number]
+    except (IndexError, TypeError):
+        header_error = None
+    if verbose:
+        click.secho(
+            f"{error} in file {filename} at line {line_number}:{field_number}:{header_error}: {message}",
+            fg="red",
+            err=True,
+        )
+    err_row = [line_number, f"{error}:{field_number}:{header_error}"] + parsed_line
+    return err_row
 
 
 if __name__ == "__main__":

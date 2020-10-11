@@ -27,15 +27,15 @@ distribute: build
 ## format: Autoformat code
 .PHONY: format
 format:
-	black csv2pg tests
-	isort csv2pg tests
+	black bin lib tests
+	isort bin lib tests
 
 ## style: Test code format
 .PHONY: style
 style:
-	black --check csv2pg tests
-	isort --check-only csv2pg tests
-	flake8 csv2pg tests
+	black --check bin lib tests
+	isort --check-only bin lib tests
+	flake8 bin lib tests
 
 ## init-test: Functional tests
 .PHONY: init-test
