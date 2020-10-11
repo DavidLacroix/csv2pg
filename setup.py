@@ -27,7 +27,7 @@ setup(
     install_requires=[
         'Click',
         'psycopg2-binary>=2.0.6',
-        'tqdm>=4',
+        'tqdm',
     ],
     python_requires='>=3.5',
     entry_points='''
