@@ -16,10 +16,9 @@ setup(
     author='David Lacroix',
 
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3',
     ],
     keywords='postgres csv',
@@ -28,10 +27,11 @@ setup(
     install_requires=[
         'Click',
         'psycopg2-binary>=2.0.6',
+        'tqdm>=4',
     ],
     python_requires='>=3.5',
     entry_points='''
         [console_scripts]
-        csv2pg=csv2pg.csv2pg:cli
+        csv2pg=bin.csv2pg:cli
     ''',
 )

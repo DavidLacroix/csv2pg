@@ -1,8 +1,9 @@
 import os
 
 import psycopg2
+import pytest
 
-from csv2pg.csv2pg import COPY_BUFFER, cli
+from bin.csv2pg import COPY_BUFFER, cli
 
 HOST = "localhost"
 PORT = 25432
@@ -21,7 +22,10 @@ DSN = "host={host} port={port} dbname={dbname} user={user}".format(
 def call_csv2pg(
     tablename,
     filepath,
+    skip_error=False,
     header=True,
+    rownum=False,
+    filename=False,
     delimiter=",",
     quotechar='"',
     doublequote=False,
@@ -30,6 +34,7 @@ def call_csv2pg(
     null="",
     encoding="utf-8",
     overwrite=False,
+    unlogged=False,
     buffer=COPY_BUFFER,
 ):
     cli.callback(
@@ -39,7 +44,11 @@ def call_csv2pg(
         USER,
         False,  # force-password
         False,  # verbose
+        False,  # progress
+        skip_error,
         header,
+        rownum,
+        filename,
         delimiter,
         quotechar,
         doublequote,
@@ -48,6 +57,7 @@ def call_csv2pg(
         null,
         encoding,
         overwrite,
+        unlogged,
         buffer,
         tablename,
         filepath,
@@ -128,7 +138,7 @@ def test_quotechar():
     tablename = "quotechar"
     asset = "tests/assets/quotechar.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, delimiter="|", quotechar="(")
+    call_csv2pg(tablename, asset, overwrite=True, delimiter="|", quotechar="@")
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -147,6 +157,30 @@ def test_escapechar():
 
     call_csv2pg(
         tablename, asset, overwrite=True, delimiter="\t", quotechar='"', escapechar="\\"
+    )
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 10
+            for row in rows:
+                assert len(row) == 3
+                for col in row:
+                    assert col is not None
+
+
+def test_doublequote_escape():
+    tablename = "doublequote_escape"
+    asset = "tests/assets/doublequote_escape.csv"
+
+    call_csv2pg(
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter="\t",
+        quotechar='"',
+        doublequote=True,
     )
 
     with psycopg2.connect(DSN) as conn:
@@ -272,3 +306,174 @@ def test_complex():
             assert len(rows) == 1000
             for row in rows:
                 assert len(row) == 19
+
+
+def test_rownum():
+    tablename = "rownum"
+    asset = "tests/assets/simple.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, rownum=True)
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 10
+            for i, row in enumerate(rows):
+                assert len(row) == 4
+                assert int(row[0]) == (i + 1)
+                for col in row:
+                    assert col is not None
+
+
+def test_rownum_no_header():
+    tablename = "rownum_no_header"
+    asset = "tests/assets/no_header.csv"
+
+    call_csv2pg(
+        tablename, asset, overwrite=True, delimiter="@", header=False, rownum=True
+    )
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 10
+            for i, row in enumerate(rows):
+                assert len(row) == 4
+                assert int(row[0]) == (i + 1)
+                for col in row:
+                    assert col is not None
+
+
+def test_rownum_encoding_iso_8859_1():
+    tablename = "rownum_encoding_iso_8859_1"
+    asset = "tests/assets/encoding_ISO_8859_1.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, rownum=True, encoding="ISO-8859-1")
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 1
+            assert rows[0][0] == 1
+            assert rows[0][1] == "ÑÆÛý¼àáäæ"
+
+
+def test_rownum_encoding_GB18030():
+    tablename = "rownum_encoding_GB18030"
+    asset = "tests/assets/encoding_GB18030.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, rownum=True, encoding="GB18030")
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 1
+            assert rows[0][0] == 1
+            assert rows[0][1] == "气广"
+
+
+def test_error_delimiter():
+    tablename = "error_delimiter"
+    asset = "tests/assets/error_delimiter.csv"
+
+    with pytest.raises(psycopg2.errors.BadCopyFileFormat):
+        call_csv2pg(tablename, asset)
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 0
+
+
+def test_error_unterminated_quote():
+    tablename = "error_unterminated_quote"
+    asset = "tests/assets/error_unterminated_quote.csv"
+
+    with pytest.raises(psycopg2.errors.BadCopyFileFormat):
+        call_csv2pg(tablename, asset)
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 0
+
+
+def test_check_delimiter():
+    tablename = "with_delimiter_error"
+    asset = "tests/assets/error_delimiter.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, skip_error=True)
+
+    with open(asset + ".err") as f:
+        errors = f.readlines()
+        assert len(errors) == 3
+        assert errors[1].startswith("2")
+        assert errors[1].split(",")[1].startswith("MissingFieldsException")
+        assert errors[2].startswith("5")
+        assert errors[2].split(",")[1].startswith("TooManyFieldsException")
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 8
+            assert 2 not in [a for a, b, c in rows]
+            assert 5 not in [a for a, b, c in rows]
+
+
+def test_check_unterminated_quote():
+    tablename = "with_quote_error"
+    asset = "tests/assets/error_unterminated_quote.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, skip_error=True)
+
+    with open(asset + ".err") as f:
+        errors = f.readlines()
+        assert len(errors) == 2
+        assert errors[1].startswith("3")
+        assert errors[1].split(",")[1].startswith("WrongFieldDialectException")
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 9
+            assert 3 not in [a for a, b, c in rows]
+
+
+def test_unlogged():
+    tablename = "not_logged"
+    asset = "tests/assets/simple.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, unlogged=True)
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute(
+                "SELECT relowner FROM pg_class WHERE relpersistence = 'u' AND relname = '{tablename}'".format(
+                    tablename=tablename
+                )
+            )
+            rows = curs.fetchone()
+            assert rows[0] == 10
+
+
+def test_filename():
+    tablename = "with_filename"
+    asset = "tests/assets/simple.csv"
+
+    call_csv2pg(tablename, asset, overwrite=True, filename=True)
+
+    with psycopg2.connect(DSN) as conn:
+        with conn.cursor() as curs:
+            curs.execute("SELECT * FROM {tablename}".format(tablename=tablename))
+            rows = curs.fetchall()
+            assert len(rows) == 10
+            for c in rows:
+                assert c[0] == "simple.csv"
