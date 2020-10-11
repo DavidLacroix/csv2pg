@@ -86,7 +86,7 @@ postgres
 Download and import a test asset file:
 ```sh
 wget https://raw.githubusercontent.com/DavidLacroix/csv2pg/master/tests/assets/simple.csv .
-csv2pg -h localhost -p 25432 -U test -d test public.data simple.csv --progress
+PGPASSWORD=test csv2pg -h localhost -p 25432 -U test -d test public.data simple.csv --progress
 ```
 
 ### Precaution
