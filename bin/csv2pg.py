@@ -232,12 +232,13 @@ def cli(
     pgpassword = os.getenv("PGPASSWORD")
     if password:
         pgpassword = click.prompt("Password", hide_input=True)
-    pg_uri = "postgres://{username}{password}@{hostname}:{port}/{dbname}?application_name=csv2pg".format(
+    pg_uri = "postgres://{username}{password}@{hostname}:{port}/{dbname}?application_name=csv2pg&connect_timeout={connect_timeout}".format(
         username=username,
         password=(":" + pgpassword if pgpassword else ""),
         hostname=hostname,
         port=port,
         dbname=dbname,
+        connect_timeout=5,
     )
 
     db_status, db_server_version = check_database(pg_uri)
