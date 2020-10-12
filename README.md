@@ -1,5 +1,8 @@
 # csv2pg
 A simple and fast cli application to load a csv into postgres
+* low memory footprint
+* blazing fast (pg copy)
+* lines and fields validation (`--skip-error`)
 
 ## Installation
 https://pypi.org/project/csv2pg/
