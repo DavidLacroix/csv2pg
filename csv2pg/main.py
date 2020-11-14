@@ -389,7 +389,7 @@ def _format_error(
     except (IndexError, TypeError):
         header_error = None
 
-    logger.error(
+    logger.info(
         f"{error} in file {filename} at line {line_number}:{field_number}:{header_error}: {message}",
     )
     err_row = [line_number, f"{error}:{field_number}:{header_error}"] + parsed_line
