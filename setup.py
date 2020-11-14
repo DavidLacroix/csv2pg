@@ -22,7 +22,7 @@ setup(
         'Programming Language :: Python :: 3',
     ],
     keywords='postgres csv',
-    packages=find_packages(exclude=["tests", "tests.*"]),
+    packages=find_packages(exclude=['tests', 'test']),
     include_package_data=True,
     install_requires=[
         'Click',
@@ -30,8 +30,9 @@ setup(
         'tqdm',
     ],
     python_requires='>=3.5',
-    entry_points='''
-        [console_scripts]
-        csv2pg=bin.csv2pg:cli
-    ''',
+    entry_points={'console_scripts': ['csv2pg=csv2pg.cli:cli'], },
+    #entry_points='''
+    #    [console_scripts]
+    #    csv2pg=csv2pg.cli:cli
+    #''',
 )

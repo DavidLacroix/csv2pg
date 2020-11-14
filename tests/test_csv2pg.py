@@ -3,65 +3,22 @@ import os
 import psycopg2
 import pytest
 
-from bin.csv2pg import COPY_BUFFER, cli
+from csv2pg import copy_to
+
 
 HOST = "localhost"
 PORT = 25432
 DBNAME = "test"
 USER = "test"
+PASSWORD = "test"
 
-os.putenv("PGPASSWORD", "test")
+os.putenv("PGPASSWORD", PASSWORD)
 DSN = "host={host} port={port} dbname={dbname} user={user}".format(
     host=HOST,
     port=PORT,
     dbname=DBNAME,
     user=USER,
 )
-
-
-def call_csv2pg(
-    tablename,
-    filepath,
-    skip_error=False,
-    header=True,
-    rownum=False,
-    filename=False,
-    delimiter=",",
-    quotechar='"',
-    doublequote=False,
-    escapechar="\\",
-    lineterminator="\r\n",
-    null="",
-    encoding="utf-8",
-    overwrite=False,
-    unlogged=False,
-    buffer=COPY_BUFFER,
-):
-    cli.callback(
-        HOST,
-        PORT,
-        DBNAME,
-        USER,
-        False,  # force-password
-        False,  # verbose
-        False,  # progress
-        skip_error,
-        header,
-        rownum,
-        filename,
-        delimiter,
-        quotechar,
-        doublequote,
-        escapechar,
-        lineterminator,
-        null,
-        encoding,
-        overwrite,
-        unlogged,
-        buffer,
-        tablename,
-        filepath,
-    )
 
 
 def test_db_connection():
@@ -76,7 +33,7 @@ def test_insert():
     tablename = "insert"
     asset = "tests/assets/simple.csv"
 
-    call_csv2pg(tablename, asset)
+    copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset)
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -93,8 +50,8 @@ def test_append():
     tablename = "append"
     asset = "tests/assets/simple.csv"
 
-    call_csv2pg(tablename, asset)
-    call_csv2pg(tablename, asset)
+    copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset)
+    copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset)
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -107,8 +64,8 @@ def test_overwrite():
     tablename = "overwrite"
     asset = "tests/assets/simple.csv"
 
-    call_csv2pg(tablename, asset)
-    call_csv2pg(tablename, asset, overwrite=True)
+    copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset)
+    copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset, overwrite=True)
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -121,7 +78,17 @@ def test_delimiter():
     tablename = "delimiter"
     asset = "tests/assets/delimiter.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, delimiter="@")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter="@",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -138,7 +105,18 @@ def test_quotechar():
     tablename = "quotechar"
     asset = "tests/assets/quotechar.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, delimiter="|", quotechar="@")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter="|",
+        quotechar="@",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -155,8 +133,18 @@ def test_escapechar():
     tablename = "escapechar"
     asset = "tests/assets/escapechar.csv"
 
-    call_csv2pg(
-        tablename, asset, overwrite=True, delimiter="\t", quotechar='"', escapechar="\\"
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter="\t",
+        quotechar='"',
+        escapechar="\\",
     )
 
     with psycopg2.connect(DSN) as conn:
@@ -174,7 +162,12 @@ def test_doublequote_escape():
     tablename = "doublequote_escape"
     asset = "tests/assets/doublequote_escape.csv"
 
-    call_csv2pg(
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
         tablename,
         asset,
         overwrite=True,
@@ -198,7 +191,18 @@ def test_no_header():
     tablename = "no_header"
     asset = "tests/assets/no_header.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, delimiter="@", header=False)
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter="@",
+        header=False,
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -215,7 +219,17 @@ def test_nulls():
     tablename = "nulls"
     asset = "tests/assets/nulls.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, delimiter=":")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter=":",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -232,7 +246,18 @@ def test_nulls_custom():
     tablename = "nulls_custom"
     asset = "tests/assets/nulls_custom.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, delimiter=":", null="NULLZZ")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter=":",
+        null="NULLZZ",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -252,7 +277,7 @@ def test_single_column():
     tablename = "single_column"
     asset = "tests/assets/single_column.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True)
+    copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset, overwrite=True)
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -269,7 +294,17 @@ def test_encoding_iso_8859_1():
     tablename = "encoding_iso_8859_1"
     asset = "tests/assets/encoding_ISO_8859_1.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, encoding="ISO-8859-1")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        encoding="ISO-8859-1",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -283,7 +318,17 @@ def test_encoding_GB18030():
     tablename = "encoding_GB18030"
     asset = "tests/assets/encoding_GB18030.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, encoding="GB18030")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        encoding="GB18030",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -297,7 +342,17 @@ def test_complex():
     tablename = "complex"
     asset = "tests/assets/complex_LE-LF_header_bom.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, lineterminator="\n")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        lineterminator="\n",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -312,7 +367,17 @@ def test_rownum():
     tablename = "rownum"
     asset = "tests/assets/simple.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, rownum=True)
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        inject_rownum=True,
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -330,8 +395,18 @@ def test_rownum_no_header():
     tablename = "rownum_no_header"
     asset = "tests/assets/no_header.csv"
 
-    call_csv2pg(
-        tablename, asset, overwrite=True, delimiter="@", header=False, rownum=True
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        delimiter="@",
+        header=False,
+        inject_rownum=True,
     )
 
     with psycopg2.connect(DSN) as conn:
@@ -350,7 +425,18 @@ def test_rownum_encoding_iso_8859_1():
     tablename = "rownum_encoding_iso_8859_1"
     asset = "tests/assets/encoding_ISO_8859_1.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, rownum=True, encoding="ISO-8859-1")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        inject_rownum=True,
+        encoding="ISO-8859-1",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -365,7 +451,18 @@ def test_rownum_encoding_GB18030():
     tablename = "rownum_encoding_GB18030"
     asset = "tests/assets/encoding_GB18030.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, rownum=True, encoding="GB18030")
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        inject_rownum=True,
+        encoding="GB18030",
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -381,7 +478,7 @@ def test_error_delimiter():
     asset = "tests/assets/error_delimiter.csv"
 
     with pytest.raises(psycopg2.errors.BadCopyFileFormat):
-        call_csv2pg(tablename, asset)
+        copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset)
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -395,7 +492,7 @@ def test_error_unterminated_quote():
     asset = "tests/assets/error_unterminated_quote.csv"
 
     with pytest.raises(psycopg2.errors.BadCopyFileFormat):
-        call_csv2pg(tablename, asset)
+        copy_to(HOST, PORT, DBNAME, USER, PASSWORD, tablename, asset)
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -408,7 +505,17 @@ def test_check_delimiter():
     tablename = "with_delimiter_error"
     asset = "tests/assets/error_delimiter.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, skip_error=True)
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        skip_error=True,
+    )
 
     with open(asset + ".err") as f:
         errors = f.readlines()
@@ -431,7 +538,17 @@ def test_check_unterminated_quote():
     tablename = "with_quote_error"
     asset = "tests/assets/error_unterminated_quote.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, skip_error=True)
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        skip_error=True,
+    )
 
     with open(asset + ".err") as f:
         errors = f.readlines()
@@ -451,7 +568,17 @@ def test_unlogged():
     tablename = "not_logged"
     asset = "tests/assets/simple.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, unlogged=True)
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        unlogged=True,
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
@@ -468,7 +595,17 @@ def test_filename():
     tablename = "with_filename"
     asset = "tests/assets/simple.csv"
 
-    call_csv2pg(tablename, asset, overwrite=True, filename=True)
+    copy_to(
+        HOST,
+        PORT,
+        DBNAME,
+        USER,
+        PASSWORD,
+        tablename,
+        asset,
+        overwrite=True,
+        inject_filename=True,
+    )
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as curs:
