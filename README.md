@@ -13,8 +13,7 @@ pip install --user csv2pg
 ## Usage
 ```
 $ csv2pg --help
-
-Usage: csv2pg.py [OPTIONS] TABLE FILEPATH
+Usage: csv2pg [OPTIONS] TABLE FILEPATH
 
   COPY FROM 'csv' TO 'postgres'
 
@@ -91,6 +90,19 @@ Download and import a test asset file:
 ```sh
 wget https://raw.githubusercontent.com/DavidLacroix/csv2pg/master/tests/assets/simple.csv .
 PGPASSWORD=test csv2pg -h localhost -p 25432 -U test -d test public.data simple.csv --progress
+```
+
+## From python
+```py
+import csv2pg
+
+HOST = "localhost"
+PORT = 25432
+DBNAME = "test"
+USER = "test"
+PASSWORD = "test"
+
+csv2pg.copy_to(HOST, PORT, DBNAME, USER, PASSWORD, "public.data", "./simple.csv", verbose=True)
 ```
 
 ### Precaution
